@@ -21,10 +21,10 @@ import javax.swing.JButton;
 import java.awt.event.ActionListener;
 import java.awt.event.ActionEvent;
 
-public class BurpExtender implements IBurpExtender, IIntruderPayloadProcessor, ITab {
+public class BurpExtender implements IBurpExtender, ITab {
     
-	// private IExtensionHelpers helpers;
-    private IBurpExtenderCallbacks callbacks;
+	// IExtensionHelpers helpers;
+    public IBurpExtenderCallbacks callbacks;
 
     // GUI Components
     private JPanel panel;
@@ -45,6 +45,9 @@ public class BurpExtender implements IBurpExtender, IIntruderPayloadProcessor, I
     private JLabel lblPlaintext;
     private JLabel lblCiphertext;
 
+    public PayloadEncrypt payloadEncryptor;
+    public PayloadDecrypt payloadDecryptor;
+    
     @Override
     public void registerExtenderCallbacks(final IBurpExtenderCallbacks callbacks) {
     	this.callbacks = callbacks;
@@ -54,19 +57,18 @@ public class BurpExtender implements IBurpExtender, IIntruderPayloadProcessor, I
 
         // set our extension name
         callbacks.setExtensionName("Encrypted AES Payloads");
-
-        // register ourselves as an Intruder payload processor
-        callbacks.registerIntruderPayloadProcessor(this);
+      
+        // Register payload encoders
+        payloadEncryptor = new PayloadEncrypt(this);
+        callbacks.registerIntruderPayloadProcessor(payloadEncryptor);
+        
+        payloadDecryptor = new PayloadDecrypt(this);
+        callbacks.registerIntruderPayloadProcessor(payloadDecryptor);
         
         // Create UI
         this.addMenuTab();
-      
     }
     
-    @Override
-    public String getProcessorName() {
-        return "AES Encrypter";
-    }
 
     /**
      * @wbp.parser.entryPoint
@@ -82,7 +84,7 @@ public class BurpExtender implements IBurpExtender, IIntruderPayloadProcessor, I
     	gbl_panel.rowWeights = new double[]{0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, Double.MIN_VALUE};
     	panel.setLayout(gbl_panel);
     	
-    	lblDescription = new JLabel("<html><b>BURP AES Manipulation functions, by @lgrangeia</b> <br><br>\r\nAES key can be 128, 192 or 256 bits, but you need to install Java Cryptography Extension (JCE) Unlimited Strength for 256 bit keys.<br>\r\nRight now what this does is configure an Intruder Payload Encoder. In the future it will do more.\r\n</html>");
+    	lblDescription = new JLabel("<html><b>BURP AES Manipulation functions, by @lgrangeia</b> <br><br>\r\nAES key can be 128, 192 or 256 bits, but you need to install Java Cryptography Extension (JCE) Unlimited Strength for 256 bit keys.<br>\r\nAside from this configuration tab there are two new Intruder Payload Encoders: \"AES Encrypt\" and \"AES Decrypt\". They use the parameters configured here.\r\n</html>");
     	lblDescription.setHorizontalAlignment(SwingConstants.LEFT);
     	lblDescription.setVerticalAlignment(SwingConstants.TOP);
     	GridBagConstraints gbc_lblDescription = new GridBagConstraints();
@@ -139,9 +141,8 @@ public class BurpExtender implements IBurpExtender, IIntruderPayloadProcessor, I
     	gbc_chckbxNewCheckBox.gridy = 3;
     	panel.add(chckbxNewCheckBox, gbc_chckbxNewCheckBox);
     	
-    	chckbxBaseEncode = new JCheckBox("Base 64 Decode/Encode (not yet working)");
+    	chckbxBaseEncode = new JCheckBox("Base 64 Decode/Encode");
     	chckbxBaseEncode.setSelected(true);
-    	chckbxBaseEncode.setEnabled(false);
     	GridBagConstraints gbc_chckbxBaseEncode = new GridBagConstraints();
     	gbc_chckbxBaseEncode.fill = GridBagConstraints.HORIZONTAL;
     	gbc_chckbxBaseEncode.insets = new Insets(0, 0, 5, 0);
@@ -292,11 +293,9 @@ public class BurpExtender implements IBurpExtender, IIntruderPayloadProcessor, I
     }
 
     public String encrypt(String plainText) throws Exception {
-        // generate key
+    	
     	byte[] keyValue= hexStringToByteArray(parameterAESkey.getText());
     	Key skeySpec = new SecretKeySpec(keyValue, "AES");
-
-        // Generate IV
     	byte[] iv = hexStringToByteArray(parameterAESIV.getText());
         IvParameterSpec ivSpec = new IvParameterSpec(iv);
 
@@ -310,12 +309,19 @@ public class BurpExtender implements IBurpExtender, IIntruderPayloadProcessor, I
         }
 
         byte[] encVal = cipher.doFinal(plainText.getBytes());
-        String encryptedValue = Base64.getEncoder().encodeToString(encVal);
-        return encryptedValue.toString();
+
+        // This wont work for http requests either output ascii hex or url encoded values
+        String encryptedValue = new String(encVal, "UTF-8");
+        
+        if(chckbxBaseEncode.isSelected()) {
+        	encryptedValue = Base64.getEncoder().encodeToString(encVal);
+        }
+        
+        return encryptedValue;
     }
     
     public String decrypt(String ciphertext) throws Exception {
-        // key + IV setup:
+
     	byte[] keyValue= hexStringToByteArray(parameterAESkey.getText());
     	Key skeySpec = new SecretKeySpec(keyValue, "AES");
     	byte[] iv = hexStringToByteArray(parameterAESIV.getText());
@@ -324,29 +330,20 @@ public class BurpExtender implements IBurpExtender, IIntruderPayloadProcessor, I
         String cmode = (String)comboAESMode.getSelectedItem();
     	
         Cipher cipher = Cipher.getInstance(cmode);
-        
         if (cmode.contains("CBC")) {
         	cipher.init(Cipher.DECRYPT_MODE, skeySpec, ivSpec);
         } else {
         	cipher.init(Cipher.DECRYPT_MODE, skeySpec);
         }
         
-        byte[] cipherbytes = Base64.getDecoder().decode(ciphertext);
-        
+        byte [] cipherbytes = ciphertext.getBytes();
+        if(chckbxBaseEncode.isSelected()) {
+        	cipherbytes = Base64.getDecoder().decode(ciphertext);
+        }
+        	
         byte[] original = cipher.doFinal(cipherbytes);
         return new String(original);
     	
     }
 
-    @Override
-    public byte[] processPayload(byte[] currentPayload, byte[] originalPayload, byte[] baseValue) {
-        try {
-            String payloadString = new String(currentPayload);
-            String result = encrypt(payloadString);
-            return result.getBytes();
-        } catch(Exception e) {
-        	this.callbacks.issueAlert(e.toString());
-        	return null;
-        }
-    }
 }
