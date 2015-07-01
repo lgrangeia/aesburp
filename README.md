@@ -4,9 +4,11 @@
 
 This is a plugin to handle AES encryption / decryption in Burp.
 
-Right now it registers an Intruder Payload Encoder Tab so you can encrypt payloads. In the future I will improve it to handle decryption and integrate it with other burp functions: scanner, repeater, etc.
+It registers two Intruder **payload processors** so you can encrypt/decrypt payloads on the **Intruder Tab**. 
 
-Contact me via twitter at @lgrangeia for suggestions and use cases and I will try to implement them.
+It also registers a **Scanner insertion point provider**. What this does is when you request an active Burp scan, it looks in existing parameters for AES payloads that can be decrypted using the current configuration / keys. If it finds any, it registers scanner insertion points to perform injection inside the AES payloads.
+
+Contact me via twitter at @lgrangeia for suggestions and use cases and I will try to implement them. I welcome ideas or pull requests.
 
 ## Compilation
 
