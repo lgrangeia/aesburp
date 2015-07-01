@@ -1,5 +1,7 @@
 package burp;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.awt.*;
 import java.security.Key;
 
@@ -10,7 +12,10 @@ import javax.swing.JPanel;
 import javax.swing.JTextField;
 import javax.swing.SwingUtilities;
 
+
+// TODO: change this to user burp's own base64 functions
 import java.util.Base64;
+
 import javax.swing.JLabel;
 import javax.swing.SwingConstants;
 import javax.swing.JTextArea;
@@ -18,12 +23,16 @@ import javax.swing.JComboBox;
 import javax.swing.DefaultComboBoxModel;
 import javax.swing.JCheckBox;
 import javax.swing.JButton;
+
 import java.awt.event.ActionListener;
 import java.awt.event.ActionEvent;
+import java.beans.PropertyChangeListener;
+import java.beans.PropertyChangeEvent;
 
-public class BurpExtender implements IBurpExtender, ITab {
+public class BurpExtender implements IBurpExtender, IScannerInsertionPointProvider, ITab {
     
 	// IExtensionHelpers helpers;
+	public IExtensionHelpers helpers;
     public IBurpExtenderCallbacks callbacks;
 
     // GUI Components
@@ -45,25 +54,28 @@ public class BurpExtender implements IBurpExtender, ITab {
     private JLabel lblPlaintext;
     private JLabel lblCiphertext;
 
-    public PayloadEncrypt payloadEncryptor;
-    public PayloadDecrypt payloadDecryptor;
+    public IntruderPayloadProcessor payloadEncryptor;
+    public IntruderPayloadProcessor payloadDecryptor;
     
     @Override
     public void registerExtenderCallbacks(final IBurpExtenderCallbacks callbacks) {
     	this.callbacks = callbacks;
     	
     	// obtain an extension helpers object
-        // helpers = callbacks.getHelpers();
+        helpers = callbacks.getHelpers();
 
         // set our extension name
         callbacks.setExtensionName("Encrypted AES Payloads");
       
         // Register payload encoders
-        payloadEncryptor = new PayloadEncrypt(this);
+        payloadEncryptor = new IntruderPayloadProcessor(this, 1);
         callbacks.registerIntruderPayloadProcessor(payloadEncryptor);
         
-        payloadDecryptor = new PayloadDecrypt(this);
+        payloadDecryptor = new IntruderPayloadProcessor(this, 0);
         callbacks.registerIntruderPayloadProcessor(payloadDecryptor);
+        
+        // register ourselves as a scanner insertion point provider
+        callbacks.registerScannerInsertionPointProvider(this);
         
         // Create UI
         this.addMenuTab();
@@ -160,6 +172,16 @@ public class BurpExtender implements IBurpExtender, ITab {
     	panel.add(lbl3, gbc_lbl3);
     	
     	comboAESMode = new JComboBox();
+    	comboAESMode.addPropertyChangeListener(new PropertyChangeListener() {
+    		public void propertyChange(PropertyChangeEvent arg0) {
+    			String cmode = (String)comboAESMode.getSelectedItem();
+    			if (cmode.contains("CBC")) {
+    				parameterAESIV.setEditable(true);
+    			} else {
+    				parameterAESIV.setEditable(false);
+    			}
+    		}
+    	});
     	comboAESMode.setModel(new DefaultComboBoxModel(new String[] {"AES/CBC/NoPadding", "AES/CBC/PKCS5Padding", "AES/ECB/NoPadding", "AES/ECB/PKCS5Padding"}));
     	comboAESMode.setSelectedIndex(1);
     	GridBagConstraints gbc_comboAESMode = new GridBagConstraints();
@@ -212,8 +234,7 @@ public class BurpExtender implements IBurpExtender, ITab {
     	
     	btnNewButton = new JButton("Encrypt ->");
     	btnNewButton.addActionListener(new ActionListener() {
-    		public void actionPerformed(ActionEvent arg0) {
-    			
+    		public void actionPerformed(ActionEvent arg0) {		
     	        try {
     	        	textAreaCiphertext.setText(encrypt(textAreaPlaintext.getText()));
     	        } catch(Exception e) {
@@ -291,6 +312,43 @@ public class BurpExtender implements IBurpExtender, ITab {
         }
         return data;
     }
+    
+    //
+    // implement IScannerInsertionPointProvider
+    //
+    
+    @Override
+    public List<IScannerInsertionPoint> getInsertionPoints(IHttpRequestResponse baseRequestResponse)
+    {
+    	// insertion points to return
+        List<IScannerInsertionPoint> insertionPoints = new ArrayList<IScannerInsertionPoint>();
+        
+        // retrieve request parameters
+    	IRequestInfo requestInfo = helpers.analyzeRequest(baseRequestResponse.getRequest());
+    	List<IParameter> requestParams = requestInfo.getParameters();
+    	
+    	callbacks.issueAlert("Searching for AES encrypted data in request...");
+    	
+    	for (IParameter parameter : requestParams) {
+    		String value = parameter.getValue();
+    		value = helpers.urlDecode(value).trim();
+    		
+    		if (value.isEmpty()) continue;
+    		
+	        try {
+            	String basevalue = decrypt(value);
+            	String basename = parameter.getName();
+            	callbacks.issueAlert("Will scan AES encrypted data at parameter " + basename + " with value " + basevalue);
+            	// Add insertion point
+            	insertionPoints.add(new InsertionPoint(this, baseRequestResponse.getRequest(), basename, basevalue));
+	        } catch(Exception e) {
+	        }
+	        
+    	}
+    	
+        return insertionPoints;
+    }
+
 
     public String encrypt(String plainText) throws Exception {
     	
