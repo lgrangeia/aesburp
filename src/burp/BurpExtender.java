@@ -11,11 +11,6 @@ import javax.crypto.spec.IvParameterSpec;
 import javax.swing.JPanel;
 import javax.swing.JTextField;
 import javax.swing.SwingUtilities;
-
-
-// TODO: change this to user burp's own base64 functions
-import java.util.Base64;
-
 import javax.swing.JLabel;
 import javax.swing.SwingConstants;
 import javax.swing.JTextArea;
@@ -372,7 +367,7 @@ public class BurpExtender implements IBurpExtender, IScannerInsertionPointProvid
         String encryptedValue = new String(encVal, "UTF-8");
         
         if(chckbxBaseEncode.isSelected()) {
-        	encryptedValue = Base64.getEncoder().encodeToString(encVal);
+        	encryptedValue = helpers.base64Encode(encVal);
         }
         
         return encryptedValue;
@@ -396,7 +391,7 @@ public class BurpExtender implements IBurpExtender, IScannerInsertionPointProvid
         
         byte [] cipherbytes = ciphertext.getBytes();
         if(chckbxBaseEncode.isSelected()) {
-        	cipherbytes = Base64.getDecoder().decode(ciphertext);
+        	cipherbytes = helpers.base64Decode(ciphertext);
         }
         	
         byte[] original = cipher.doFinal(cipherbytes);
