@@ -40,7 +40,6 @@ public class BurpExtender implements IBurpExtender, IScannerInsertionPointProvid
     private JComboBox comboAESMode;
     private JLabel lbl3;
     private JCheckBox chckbxNewCheckBox;
-    private JCheckBox chckbxBaseEncode;
     private JPanel panel_1;
     private JButton btnNewButton;
     private JTextArea textAreaPlaintext;
@@ -52,6 +51,11 @@ public class BurpExtender implements IBurpExtender, IScannerInsertionPointProvid
     public IntruderPayloadProcessor payloadEncryptor;
     public IntruderPayloadProcessor payloadDecryptor;
     
+    public Boolean isURLEncoded;
+    
+    private JLabel lbl4;
+    private JComboBox comboEncoding;
+    
     @Override
     public void registerExtenderCallbacks(final IBurpExtenderCallbacks callbacks) {
     	this.callbacks = callbacks;
@@ -60,7 +64,7 @@ public class BurpExtender implements IBurpExtender, IScannerInsertionPointProvid
         helpers = callbacks.getHelpers();
 
         // set our extension name
-        callbacks.setExtensionName("Encrypted AES Payloads");
+        callbacks.setExtensionName("AES Crypto v1.0");
       
         // Register payload encoders
         payloadEncryptor = new IntruderPayloadProcessor(this, 1);
@@ -71,6 +75,8 @@ public class BurpExtender implements IBurpExtender, IScannerInsertionPointProvid
         
         // register ourselves as a scanner insertion point provider
         callbacks.registerScannerInsertionPointProvider(this);
+        
+        isURLEncoded = false;
         
         // Create UI
         this.addMenuTab();
@@ -85,18 +91,18 @@ public class BurpExtender implements IBurpExtender, IScannerInsertionPointProvid
     public void buildUI() {
     	panel = new JPanel();
     	GridBagLayout gbl_panel = new GridBagLayout();
-    	gbl_panel.columnWidths = new int[]{139, 400, 0};
+    	gbl_panel.columnWidths = new int[]{197, 400, 0};
     	gbl_panel.rowHeights = new int[]{0, 0, 0, 0, 0, 0, 0, 0};
     	gbl_panel.columnWeights = new double[]{1.0, 1.0, Double.MIN_VALUE};
     	gbl_panel.rowWeights = new double[]{0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, Double.MIN_VALUE};
     	panel.setLayout(gbl_panel);
     	
-    	lblDescription = new JLabel("<html><b>BURP AES Manipulation functions, by @lgrangeia</b> <br><br>\r\nAES key can be 128, 192 or 256 bits, but you need to install Java Cryptography Extension (JCE) Unlimited Strength for 256 bit keys.<br>\r\nAside from this configuration tab there are two new Intruder Payload Encoders: \"AES Encrypt\" and \"AES Decrypt\". They use the parameters configured here.\r\n</html>");
+    	lblDescription = new JLabel("<html><b>BURP AES Manipulation functions v1.0</b>\r\n<br>\r\n<br>\r\ntwitter: twitter.com/lgrangeia\r\n<br>\r\ngithub: github.com/lgrangeia\r\n<br>\r\n<br>\r\nAES key can be 128, 192 or 256 bits, but you need to install Java Cryptography Extension (JCE) Unlimited Strength for 256 bit keys.<br>\r\nThis extension registers the following:\r\n<ul>\r\n  <li>AES Encrypt / Decrypt Payload Encoder</li>\r\n  <li>Scanner Insertion Point Provider: attempts to insert payloads inside encrypted insertion points</li>\r\n</ul>\r\n\r\n</html>");
     	lblDescription.setHorizontalAlignment(SwingConstants.LEFT);
     	lblDescription.setVerticalAlignment(SwingConstants.TOP);
     	GridBagConstraints gbc_lblDescription = new GridBagConstraints();
     	gbc_lblDescription.fill = GridBagConstraints.HORIZONTAL;
-    	gbc_lblDescription.insets = new Insets(0, 0, 5, 0);
+    	gbc_lblDescription.insets = new Insets(20, 20, 20, 20);
     	gbc_lblDescription.gridx = 1;
     	gbc_lblDescription.gridy = 0;
     	panel.add(lblDescription, gbc_lblDescription);
@@ -148,14 +154,24 @@ public class BurpExtender implements IBurpExtender, IScannerInsertionPointProvid
     	gbc_chckbxNewCheckBox.gridy = 3;
     	panel.add(chckbxNewCheckBox, gbc_chckbxNewCheckBox);
     	
-    	chckbxBaseEncode = new JCheckBox("Base 64 Decode/Encode");
-    	chckbxBaseEncode.setSelected(true);
-    	GridBagConstraints gbc_chckbxBaseEncode = new GridBagConstraints();
-    	gbc_chckbxBaseEncode.fill = GridBagConstraints.HORIZONTAL;
-    	gbc_chckbxBaseEncode.insets = new Insets(0, 0, 5, 0);
-    	gbc_chckbxBaseEncode.gridx = 1;
-    	gbc_chckbxBaseEncode.gridy = 4;
-    	panel.add(chckbxBaseEncode, gbc_chckbxBaseEncode);
+    	lbl4 = new JLabel("Ciphertext encoding:");
+    	lbl4.setHorizontalAlignment(SwingConstants.RIGHT);
+    	GridBagConstraints gbc_lbl4 = new GridBagConstraints();
+    	gbc_lbl4.anchor = GridBagConstraints.EAST;
+    	gbc_lbl4.insets = new Insets(0, 0, 5, 5);
+    	gbc_lbl4.gridx = 0;
+    	gbc_lbl4.gridy = 4;
+    	panel.add(lbl4, gbc_lbl4);
+    	
+    	comboEncoding = new JComboBox();
+    	comboEncoding.setModel(new DefaultComboBoxModel(new String[] {"Base 64", "ASCII Hex"}));
+    	comboEncoding.setSelectedIndex(0);
+    	GridBagConstraints gbc_comboEncoding = new GridBagConstraints();
+    	gbc_comboEncoding.insets = new Insets(0, 0, 5, 0);
+    	gbc_comboEncoding.fill = GridBagConstraints.HORIZONTAL;
+    	gbc_comboEncoding.gridx = 1;
+    	gbc_comboEncoding.gridy = 4;
+    	panel.add(comboEncoding, gbc_comboEncoding);
     	
     	lbl3 = new JLabel("AES Mode:");
     	lbl3.setHorizontalAlignment(SwingConstants.RIGHT);
@@ -189,7 +205,6 @@ public class BurpExtender implements IBurpExtender, IScannerInsertionPointProvid
     	panel_1 = new JPanel();
     	GridBagConstraints gbc_panel_1 = new GridBagConstraints();
     	gbc_panel_1.gridwidth = 2;
-    	gbc_panel_1.insets = new Insets(0, 0, 0, 5);
     	gbc_panel_1.fill = GridBagConstraints.BOTH;
     	gbc_panel_1.gridx = 0;
     	gbc_panel_1.gridy = 6;
@@ -308,6 +323,16 @@ public class BurpExtender implements IBurpExtender, IScannerInsertionPointProvid
         return data;
     }
     
+	public static String byteArrayToHexString(byte[] b) {
+		int len = b.length;
+		String data = new String();
+		for (int i = 0; i < len; i++){
+			data += Integer.toHexString((b[i] >> 4) & 0xf);
+			data += Integer.toHexString(b[i] & 0xf);
+		}
+		return data;
+	}
+    
     //
     // implement IScannerInsertionPointProvider
     //
@@ -349,8 +374,9 @@ public class BurpExtender implements IBurpExtender, IScannerInsertionPointProvid
     	
     	byte[] keyValue= hexStringToByteArray(parameterAESkey.getText());
     	Key skeySpec = new SecretKeySpec(keyValue, "AES");
+    	
     	byte[] iv = hexStringToByteArray(parameterAESIV.getText());
-        IvParameterSpec ivSpec = new IvParameterSpec(iv);
+    	IvParameterSpec ivSpec = new IvParameterSpec(iv);
 
         String cmode = (String)comboAESMode.getSelectedItem();
         
@@ -366,8 +392,13 @@ public class BurpExtender implements IBurpExtender, IScannerInsertionPointProvid
         // This wont work for http requests either output ascii hex or url encoded values
         String encryptedValue = new String(encVal, "UTF-8");
         
-        if(chckbxBaseEncode.isSelected()) {
-        	encryptedValue = helpers.base64Encode(encVal);
+        switch (comboEncoding.getSelectedItem().toString()) {
+    		case "Base 64":
+    			encryptedValue = helpers.base64Encode(encVal);
+    			break;
+    		case "ASCII Hex":
+    			encryptedValue = byteArrayToHexString(encVal);
+    			break;
         }
         
         return encryptedValue;
@@ -390,10 +421,16 @@ public class BurpExtender implements IBurpExtender, IScannerInsertionPointProvid
         }
         
         byte [] cipherbytes = ciphertext.getBytes();
-        if(chckbxBaseEncode.isSelected()) {
-        	cipherbytes = helpers.base64Decode(ciphertext);
+        
+        switch (comboEncoding.getSelectedItem().toString()) {
+        	case "Base 64":
+        		cipherbytes = helpers.base64Decode(ciphertext);
+        		break;
+    		case "ASCII Hex":
+    			cipherbytes = hexStringToByteArray(ciphertext);
+    			break;
         }
-        	
+        
         byte[] original = cipher.doFinal(cipherbytes);
         return new String(original);
     	
