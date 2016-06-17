@@ -44,6 +44,8 @@ public class BurpExtender implements IBurpExtender, IScannerInsertionPointProvid
     private JButton btnNewButton;
     private JTextArea textAreaPlaintext;
     private JTextArea textAreaCiphertext;
+    private JScrolPane plainTextScroll;
+    private JScrolPane cipherTextScroll;
     private JButton btnNewButton_1;
     private JLabel lblPlaintext;
     private JLabel lblCiphertext;
@@ -240,7 +242,8 @@ public class BurpExtender implements IBurpExtender, IScannerInsertionPointProvid
     	gbc_textAreaPlaintext.fill = GridBagConstraints.BOTH;
     	gbc_textAreaPlaintext.gridx = 0;
     	gbc_textAreaPlaintext.gridy = 1;
-    	panel_1.add(textAreaPlaintext, gbc_textAreaPlaintext);
+    	plainTextScroll = new JScrollPane(textAreaPlaintext); 
+    	panel_1.add(plainTextScroll, gbc_textAreaPlaintext);
     	
     	btnNewButton = new JButton("Encrypt ->");
     	btnNewButton.addActionListener(new ActionListener() {
@@ -266,7 +269,8 @@ public class BurpExtender implements IBurpExtender, IScannerInsertionPointProvid
     	gbc_textAreaCiphertext.fill = GridBagConstraints.BOTH;
     	gbc_textAreaCiphertext.gridx = 2;
     	gbc_textAreaCiphertext.gridy = 1;
-    	panel_1.add(textAreaCiphertext, gbc_textAreaCiphertext);
+    	cipherTextScroll = new JScrollPane(textAreaCiphertext); 
+    	panel_1.add(cipherTextScroll, gbc_textAreaCiphertext);
     	
     	btnNewButton_1 = new JButton("<- Decrypt");
     	btnNewButton_1.addActionListener(new ActionListener() {
