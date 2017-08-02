@@ -1,5 +1,6 @@
 package burp;
 
+import java.util.Arrays;
 import java.util.ArrayList;
 import java.util.List;
 import java.awt.*;
@@ -64,7 +65,7 @@ public class BurpExtender implements IBurpExtender, IScannerInsertionPointProvid
         helpers = callbacks.getHelpers();
 
         // set our extension name
-        callbacks.setExtensionName("AES Crypto v1.0");
+        callbacks.setExtensionName("AES Crypto v1.1");
       
         // Register payload encoders
         payloadEncryptor = new IntruderPayloadProcessor(this, 1);
@@ -97,7 +98,7 @@ public class BurpExtender implements IBurpExtender, IScannerInsertionPointProvid
     	gbl_panel.rowWeights = new double[]{0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, Double.MIN_VALUE};
     	panel.setLayout(gbl_panel);
     	
-    	lblDescription = new JLabel("<html><b>BURP AES Manipulation functions v1.0</b>\r\n<br>\r\n<br>\r\ntwitter: twitter.com/lgrangeia\r\n<br>\r\ngithub: github.com/lgrangeia\r\n<br>\r\n<br>\r\nAES key can be 128, 192 or 256 bits, but you need to install Java Cryptography Extension (JCE) Unlimited Strength for 256 bit keys.<br>\r\nThis extension registers the following:\r\n<ul>\r\n  <li>AES Encrypt / Decrypt Payload Encoder</li>\r\n  <li>Scanner Insertion Point Provider: attempts to insert payloads inside encrypted insertion points</li>\r\n</ul>\r\n\r\n</html>");
+        lblDescription = new JLabel("<html><b>BURP AES Manipulation functions v1.1</b>\r\n<br>\r\n<br>\r\ntwitter: twitter.com/lgrangeia\r\n<br>\r\ngithub: github.com/lgrangeia\r\n<br>\r\n<br>\r\nAES key can be 128, 192 or 256 bits, but you need to install Java Cryptography Extension (JCE) Unlimited Strength for 256 bit keys.<br>\r\nThis extension registers the following:\r\n<ul>\r\n  <li>AES Encrypt / Decrypt Payload Encoder</li>\r\n  <li>Scanner Insertion Point Provider: attempts to insert payloads inside encrypted insertion points</li>\r\n</ul>\r\n\r\n</html>");
     	lblDescription.setHorizontalAlignment(SwingConstants.LEFT);
     	lblDescription.setVerticalAlignment(SwingConstants.TOP);
     	GridBagConstraints gbc_lblDescription = new GridBagConstraints();
@@ -145,8 +146,8 @@ public class BurpExtender implements IBurpExtender, IScannerInsertionPointProvid
     	gbc_parameterAESIV.gridy = 2;
     	panel.add(parameterAESIV, gbc_parameterAESIV);
     	
-    	chckbxNewCheckBox = new JCheckBox("IV block in Ciphertext (not yet working)");
-    	chckbxNewCheckBox.setEnabled(false);
+        chckbxNewCheckBox = new JCheckBox("IV block in Ciphertext");
+        chckbxNewCheckBox.setEnabled(true);
     	GridBagConstraints gbc_chckbxNewCheckBox = new GridBagConstraints();
     	gbc_chckbxNewCheckBox.fill = GridBagConstraints.HORIZONTAL;
     	gbc_chckbxNewCheckBox.insets = new Insets(0, 0, 5, 0);
@@ -389,6 +390,13 @@ public class BurpExtender implements IBurpExtender, IScannerInsertionPointProvid
 
         byte[] encVal = cipher.doFinal(plainText.getBytes());
 
+        if (chckbxNewCheckBox.isSelected()) {
+            byte[] enc = cipher.doFinal(plainText.getBytes());
+            encVal = new byte[iv.length + enc.length];
+            System.arraycopy(iv, 0, encVal, 0, iv.length);
+            System.arraycopy(enc, 0, encVal, iv.length, enc.length);
+        }
+
         // This wont work for http requests either output ascii hex or url encoded values
         String encryptedValue = new String(encVal, "UTF-8");
         
@@ -409,16 +417,7 @@ public class BurpExtender implements IBurpExtender, IScannerInsertionPointProvid
     	byte[] keyValue= hexStringToByteArray(parameterAESkey.getText());
     	Key skeySpec = new SecretKeySpec(keyValue, "AES");
     	byte[] iv = hexStringToByteArray(parameterAESIV.getText());
-        IvParameterSpec ivSpec = new IvParameterSpec(iv);
-        
         String cmode = (String)comboAESMode.getSelectedItem();
-    	
-        Cipher cipher = Cipher.getInstance(cmode);
-        if (cmode.contains("CBC")) {
-        	cipher.init(Cipher.DECRYPT_MODE, skeySpec, ivSpec);
-        } else {
-        	cipher.init(Cipher.DECRYPT_MODE, skeySpec);
-        }
         
         byte [] cipherbytes = ciphertext.getBytes();
         
@@ -431,6 +430,20 @@ public class BurpExtender implements IBurpExtender, IScannerInsertionPointProvid
     			break;
         }
         
+        if (chckbxNewCheckBox.isSelected()) {
+            iv = Arrays.copyOfRange(cipherbytes, 0, 16);
+            cipherbytes = Arrays.copyOfRange(cipherbytes, 16, cipherbytes.length);
+        }
+
+        IvParameterSpec ivSpec = new IvParameterSpec(iv);
+
+        Cipher cipher = Cipher.getInstance(cmode);
+        if (cmode.contains("CBC")) {
+            cipher.init(Cipher.DECRYPT_MODE, skeySpec, ivSpec);
+        } else {
+            cipher.init(Cipher.DECRYPT_MODE, skeySpec);
+        }
+
         byte[] original = cipher.doFinal(cipherbytes);
         return new String(original);
     	
